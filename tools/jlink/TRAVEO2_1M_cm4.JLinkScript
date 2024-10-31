@@ -1,0 +1,10 @@
+void InitTarget(void) {
+  Report("********************************************");
+  Report("InitTarget for PSoC6 Cortex-M4 script");
+  CORESIGHT_AddAP(0, CORESIGHT_AHB_AP);  // SYSAP
+  CORESIGHT_AddAP(1, CORESIGHT_AHB_AP);  // AHB-AP used to connect to M0+ core
+  CORESIGHT_AddAP(2, CORESIGHT_AHB_AP);  // AHB-AP used to connect to M4 core
+  CORESIGHT_IndexAHBAPToUse = 2;
+  CPU=CORTEX_M4;
+  Report("********************************************");
+}

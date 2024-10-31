@@ -1,0 +1,527 @@
+/***********************************************************************
+*                    SEGGER Microcontroller GmbH                       *
+*                        The Embedded Experts                          *
+************************************************************************
+*                                                                      *
+*                  (c) SEGGER Microcontroller GmbH                     *
+*                        All rights reserved                           *
+*                          www.segger.com                              *
+*                                                                      *
+************************************************************************
+*                                                                      *
+************************************************************************
+*                                                                      *
+*                                                                      *
+*  Licensing terms                                                     *
+*                                                                      *
+* The use in source and binary forms, with or without modification,    *
+* is permitted for internal use only. The redistribution to any        *
+* third party is prohibited.                                           *
+*                                                                      *
+*                                                                      *
+* THIS SOFTWARE IS PROVIDED BY COPYRIGHT HOLDER "AS IS" AND ANY        *
+* EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE    *
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR   *
+* PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL COPYRIGHT HOLDER BE        *
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,     *
+* OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,             *
+* PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR   *
+* PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY  *
+* OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT         *
+* (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE    *
+* USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH     *
+* DAMAGE.                                                              *
+*                                                                      *
+************************************************************************
+
+-------------------------- END-OF-HEADER -----------------------------
+
+Purpose: Contains device specific reset for Cypress CYT4 M7 cores.
+Literature:
+  [1] https://wiki.segger.com/J-Link_script_files
+  [2] https://wiki.segger.com/Infineon_Traveo_II_device_family#Reset
+*/
+
+/*********************************************************************
+*
+*       Constants (ARM specific)
+*
+**********************************************************************
+*/
+//
+// Device specific defines
+//
+__constant U32 _INDEX_AHB_AP_CORTEX_M7_0      = 2;
+__constant U32 _INDEX_AHB_AP_CORTEX_M7_1      = 3;
+//
+// SFRs
+//
+__constant U32 _FPB                           = 0xE0002000;
+__constant U32 _FP_CTRL                       = _FPB + 0x000;
+__constant U32 _FP_COMP0                      = _FPB + 0x008;
+
+__constant U32 _AIRCR                         = 0xE000ED0C;
+__constant U32 _DHCSR                         = 0xE000EDF0;
+__constant U32 _DEMCR                         = 0xE000EDFC;
+//
+// Bits, Shifts, Values
+//
+__constant U32 _DHCSR_DBGKEY                  = (0xA05F << 16);
+__constant U32 _DHCSR_C_DEBUGEN               = (1 <<  0);
+__constant U32 _DHCSR_C_HALT                  = (1 <<  1);
+__constant U32 _DHCSR_S_REGRDY                = (1 << 16);
+__constant U32 _DHCSR_S_HALT                  = (1 << 17);
+
+__constant U32 _DEMCR_VC_CORERESET            = (1 <<  0);
+__constant U32 _DEMCR_TRCENA                  = (1 << 24);
+
+__constant U32 _AIRCR_VECTKEY                 = (0x05FA << 16);
+__constant U32 _AIRCR_SYSRESETREQ             = (1 <<  2);
+
+__constant U32 _DAP_ACC_32BIT_AUTO_INC        = (1 << 29) | (1 << 25) | (1 << 24) | (1 << 4) | (2 << 0);  // HMASTER = DEBUG, Private access, Auto-increment, Access size: word;
+__constant U32 _DAP_ACC_8BIT_NO_AUTO_INC      = (1 << 29) | (1 << 25) | (1 << 24) | (0 << 4) | (0 << 0);  // HMASTER = DEBUG, Private access, no Auto-increment, Access size: byte;
+__constant U32 _DAP_ACC_16BIT_NO_AUTO_INC     = (1 << 29) | (1 << 25) | (1 << 24) | (0 << 4) | (1 << 0);  // HMASTER = DEBUG, Private access, no Auto-increment, Access size: half word;
+__constant U32 _DAP_ACC_32BIT_NO_AUTO_INC     = (1 << 29) | (1 << 25) | (1 << 24) | (0 << 4) | (2 << 0);  // HMASTER = DEBUG, Private access, no Auto-increment, Access size: word;
+__constant U32 _DP_CTRL_STAT_BIT_DBGPWRUPREQ  = (1 << 30);
+__constant U32 _DP_CTRL_STAT_BIT_SYSPWRUPREQ  = (1 << 28);
+__constant U32 _DP_CTRL_STAT_BIT_STICKYERR    = (1 <<  5);
+
+/*********************************************************************
+*
+*       Constants (device specific)
+*
+**********************************************************************
+*/
+//
+// SFRs
+//
+__constant U32 _CPUSS_BASE                    = 0x40200000;
+__constant U32 _CPUSS_CM7_0_CTL               = _CPUSS_BASE + 0x000C;
+__constant U32 _CPUSS_CM7_1_CTL               = _CPUSS_BASE + 0x040C;
+__constant U32 _CPUSS_CM7_0_PWR_CTL           = _CPUSS_BASE + 0x1200;
+__constant U32 _CPUSS_CM7_1_PWR_CTL           = _CPUSS_BASE + 0x1210;
+//
+// Bits, Shifts, Values
+//
+__constant U32 _PWR_CTL_VECTKEY               = 0x05FA0000;
+__constant U32 _PWR_MODE_MASK                 = (3 << 0); // CPUSS_<Core>_PWR_CTL - MODE: Mask
+__constant U32 _PWR_CTL_OFF                   = (0 << 0); // CPUSS_<Core>_PWR_CTL - MODE: Power off core
+__constant U32 _PWR_CTL_RESET                 = (1 << 0); // CPUSS_<Core>_PWR_CTL - MODE: Reset core (warm boot)
+__constant U32 _PWR_CTL_RETAINED              = (2 << 0); // CPUSS_<Core>_PWR_CTL - MODE: Retained mode (power off, no reset, retained)
+__constant U32 _PWR_CTL_ENABLED               = (3 << 0); // CPUSS_<Core>_PWR_CTL - MODE: Enabled (power on, no reset, no retain)
+
+__constant U32 _CTL_DEFAULT_VAL               = 0x1F;     // CPUSS_<Core>_CTL: Reset value
+__constant U32 _SHIFT_PPB_LOCK                =    0;     // CPUSS_<Core>_CTL: Write disable for specific CPU regs
+__constant U32 _SHIFT_CPU_WAIT                =    4;     // CPUSS_<Core>_CTL: CPU stalled after reset
+__constant U32 _SHIFT_INIT_TCM_EN             =    8;     // CPUSS_<Core>_CTL: TCM enable init after reset
+__constant U32 _SHIFT_INIT_RMW_EN             =   10;     // CPUSS_<Core>_CTL: TCM RMW enable init after reset
+__constant U32 _SHIFT_ITCM_ECC_EN             =   16;     // CPUSS_<Core>_CTL: ITCM ECC enable
+__constant U32 _SHIFT_ITCM_ECC_INJ_EN         =   17;     // CPUSS_<Core>_CTL: ITCM ECC err injection enable
+__constant U32 _SHIFT_ITCM_READ_WS            =   18;     // CPUSS_<Core>_CTL: ITCM read wait states (0 or 1)
+__constant U32 _SHIFT_ITCM_ECC_CHECK_DIS      =   19;     // CPUSS_<Core>_CTL: Disable ECC checks
+__constant U32 _SHIFT_DTCM_ECC_EN             =   20;     // CPUSS_<Core>_CTL: DTCM ECC enable
+__constant U32 _SHIFT_DTCM_ECC_INJ_EN         =   21;     // CPUSS_<Core>_CTL: DTCM ECC err injection enable
+__constant U32 _SHIFT_DTCM_READ_WS            =   22;     // CPUSS_<Core>_CTL: DTCM read wait states (0 or 1)
+
+__constant U32 _CODE_FLASH_BASE               = 0x10000000;
+__constant U32 _CODE_FLASH_MAX_SIZE           = 0x830000;
+
+/*********************************************************************
+*
+*       Constants (user configuration)
+*
+**********************************************************************
+*/
+//
+// If the second CM7 is connected to, change all three to *_CM7_1_* instead.
+//
+// USER SELECTION REQUIRED
+//
+__constant U32 _CPUSS_CTL                     = _CPUSS_CM7_0_CTL;
+__constant U32 _PWR_CTL                       = _CPUSS_CM7_0_PWR_CTL;
+__constant U32 _INDEX_CORE_TO_USE             = _INDEX_AHB_AP_CORTEX_M7_0;
+//
+// Reset strategy selection
+// 0 == Core reset only.
+// 1 == full system reset.
+//
+// USER SELECTION REQUIRED
+//
+__constant U8 _USE_SYS_RESET_NOT_CORE_RESET   = 0;
+/*********************************************************************
+*
+*       Local functions
+*
+**********************************************************************
+*/
+
+/*********************************************************************
+*
+*       _WriteData
+*
+*  Function descripton
+*    Writes a CPU register via AHBAP
+*/
+static int _WriteData(U32 Addr, U32 Data) {
+  int r;
+  r  = JLINK_CORESIGHT_WriteAP(JLINK_CORESIGHT_AP_REG_ADDR, Addr);
+  r |= JLINK_CORESIGHT_WriteAP(JLINK_CORESIGHT_AP_REG_DATA, Data);
+  return r;
+}
+
+/*********************************************************************
+*
+*       _ReadData
+*
+*  Function descripton
+*    Reads a CPU register via AHBAP
+*/
+static int _ReadData(U32 Addr) {
+  U32 v;
+  int r;
+  r = JLINK_CORESIGHT_WriteAP(JLINK_CORESIGHT_AP_REG_ADDR, Addr);
+  if (r == -1) {
+    return -1;
+  }
+  v = JLINK_CORESIGHT_ReadAP(JLINK_CORESIGHT_AP_REG_DATA);
+  return v;
+}
+
+/*********************************************************************
+*
+*       _SelectAHB
+*
+*  Function description
+*    Selects AHB AP[Index].
+*
+*  Notes
+*    (1) Relies on DAP already prepared, so powered up etc. via generic part of SW or _PrepDAP() being called in advance
+*/
+static void _SelectAHB(U32 Index) {
+  JLINK_CORESIGHT_WriteDP(JLINK_CORESIGHT_DP_REG_SELECT, (0 << 4) | (Index << 24));  // Select AP[Index], bank 0
+  JLINK_CORESIGHT_WriteAP(JLINK_CORESIGHT_AP_REG_CTRL,   _DAP_ACC_32BIT_NO_AUTO_INC);
+}
+
+/*********************************************************************
+*
+*       _DAPClrStickyErr
+*
+*  Function description
+*    Clears the DAP sticky error flags.
+*/
+static void _DAPClrStickyErr(void) {
+  U32 v;
+  //
+  // The DP is slightly different for JTAG and SWD regarding clearing sticky error bits.
+  //
+  v  = _DP_CTRL_STAT_BIT_DBGPWRUPREQ | _DP_CTRL_STAT_BIT_SYSPWRUPREQ;
+  if (JLINK_ActiveTIF == JLINK_TIF_JTAG) {
+    v |= _DP_CTRL_STAT_BIT_STICKYERR;
+  } else {
+    JLINK_CORESIGHT_WriteDP(JLINK_CORESIGHT_DP_REG_ABORT, 0x1E);
+  }
+  JLINK_CORESIGHT_WriteDP(JLINK_CORESIGHT_DP_REG_CTRL_STAT, v);
+}
+
+/*********************************************************************
+*
+*       _ConfigureAP()
+*
+*  Function description
+*    Configures selected AP for debugging.
+*/
+static int _ConfigureAP(U32 Index) {
+  U32 v;
+  int r;
+  //
+  // Select AP and bank to use
+  //
+  v = 0
+    | (0     <<  4)  // Select bank 0 (this is default for most casese).
+    | (Index << 24)  // Select AP[Index] (AHB-AP)
+    ;
+  JLINK_CORESIGHT_WriteDP(JLINK_CORESIGHT_DP_REG_SELECT,  v);
+  //
+  // Initialize DAP for debug use.
+  //
+  v = (2 <<  0)      // Access size: word
+    | (0 <<  4)      // No auto increment
+    | (1 << 24)      // Reserved
+    | (1 << 25)      // Private access
+    | (1 << 29)      // MasterType == Debug
+    ;
+  r = JLINK_CORESIGHT_WriteAP(JLINK_CORESIGHT_AP_REG_CTRL, v);
+  if (r < 0) {
+    JLINK_SYS_Report("Error: Failed to configure AP.");
+    return -1;
+  }
+  return 0;
+}
+
+/*********************************************************************
+*
+*       _InitDAP()
+*
+*  Function description
+*    Initializes DAP, so JLINK_CORESIGHT_ functions can be used.
+*/
+static int _InitDAP(void) {
+  U32 v;
+  int r;
+  int t;
+  _DAPClrStickyErr();                    // Clear sticky error flags and power up DAP
+  //
+  // Wait for power up DAP complete
+  //
+  r = -1;
+  t = JLINK_GetTime() + 500;
+  do {
+    r = JLINK_CORESIGHT_ReadDP(JLINK_CORESIGHT_DP_REG_CTRL_STAT);
+    if (r == -1) {                       // Any error occurred while reading from the DP, we are done
+      break;
+    }
+    v = r;
+    if (v & (0xF << 28)) {               // CSYSPWRUPACK and CDBGPWRUPACK set, so both ports have been completely powered?
+      r = 0;
+      break;
+    }
+    if ((t - JLINK_GetTime()) <= 0) {
+      break;
+    }
+  } while(1);
+  if (r < 0) {
+    JLINK_SYS_Report("Error: Failed to initialized DAP.");
+    return -1;
+  }
+  r = _ConfigureAP(_INDEX_CORE_TO_USE);  // Finally configure the AP so we can use it.
+  if (r < 0) {
+    return -1;
+  }
+  JLINK_SYS_Report("DAP initialized successfully.");
+  return 0;
+}
+
+/*********************************************************************
+*
+*       _HL_WaitUntilHalted
+*
+*  Function description
+*    Waits until CPU is halted
+*    If a timeout occurs, the CPU will be halted manually.
+*
+*  Return value
+*    >= 0:  O.K.
+*     < 0:  Error
+*/
+static int _LL_WaitUntilHalted(U32 Timeout) {
+  U32 Status;
+  int t;
+  int r;
+
+  t = JLINK_GetTime() + Timeout;
+  do {
+    Status  = _ReadData(_DHCSR);
+    Status &= _DHCSR_S_HALT;
+    if (Status == _DHCSR_S_HALT) {    // Operation complete? => Done.
+      r = 0;
+      break;
+    }
+    if ((t - JLINK_GetTime()) < 0) {  // Timeout reached? => Error.
+      r = -1;
+      break;
+    }
+  } while (1);
+  return r;
+}
+
+/*********************************************************************
+*
+*       _LL_TargetHalt
+*
+*  Function description
+*    This function halts the targets and waits until it is halted
+*
+*  Return value
+*    >= 0:  O.K.
+*     < 0:  Error
+*/
+static int _LL_TargetHalt(U32 Timeout) {
+  U32 v;
+
+  v = _DHCSR_DBGKEY
+    | _DHCSR_C_HALT
+    | _DHCSR_C_DEBUGEN
+    ;
+  _WriteData(_DHCSR, v);
+  return _LL_WaitUntilHalted(Timeout);
+}
+
+/*********************************************************************
+*
+*       _LL_TargetGo
+*
+*  Function description
+*    This function halts the targets and waits until it is halted
+*
+*  Return value
+*    >= 0:  O.K.
+*     < 0:  Error
+*/
+static void _LL_TargetGo(void) {
+  U32 v;
+
+  v = _DHCSR_DBGKEY
+    | _DHCSR_C_DEBUGEN
+    ;
+  _WriteData(_DHCSR, v);
+}
+
+/*********************************************************************
+*
+*       _SetBPIfValid()
+*
+*  Function description
+*    Sets breakpoint on address.
+*/
+static U8 _SetBPIfValid(U32 Addr, U32* pFPctrl, U32* pFPcomp) {
+  U32 v;
+  
+  Addr = JLINK_MEM_ReadU32(Addr);    // Get potential reset vector address.
+  //
+  // Do some reset vector address validity checks.
+  //
+  if (Addr < _CODE_FLASH_BASE) {     // Address outside of code flash (below)? Done.
+   return 0;
+  }
+  v = _CODE_FLASH_BASE + _CODE_FLASH_MAX_SIZE;
+  if (Addr >= v) {                   // Address outside of code flash (above)? Done.
+    return 0;
+  }
+  if ((Addr & 1) == 0) {             // Thumb bit not set? => Done.
+    return 0;
+  }
+  //
+  // Valid address found? => Remember register values and set BP.
+  //
+  JLINK_SYS_Report1("Reset handler address found: ", (Addr & ~1));
+  *pFPctrl = JLINK_MEM_ReadU32(_FP_CTRL);
+  *pFPcomp = JLINK_MEM_ReadU32(_FP_COMP0);
+   JLINK_MEM_WriteU32(_FP_CTRL, 3);  // Enable flash patch unit
+  v = (v & ~3)                       // Mask out lower bits
+    | (1 << 30)                      // REPLACE[3] - b'01Break on lower half word
+    | (1 << 0)                       // ENABLE  - Enable Comparator
+    ;
+  JLINK_MEM_WriteU32(_FP_COMP0, v);
+  return 1;
+}
+
+/*********************************************************************
+*
+*       _RestoreBP()
+*
+*  Function description
+*    Restores FP registers.
+*/
+static void _RestoreBP(U32 FPctrl, U32 fpcr) {
+  JLINK_MEM_WriteU32(_FP_CTRL, (FPctrl | (1 << 1)));
+  JLINK_MEM_WriteU32(_FP_COMP0, fpcr);
+}
+
+/*********************************************************************
+*
+*       _SetClr_CpuWait()
+*
+*  Function description
+*    Setup the core specific CPUSS_CTL register for debug use.
+*/
+static void _SetClr_CpuWait(U32 SetNotClear) {
+  U32 CpuWait;
+  U32 v;
+  
+  if (SetNotClear) {
+    JLINK_SYS_Report("Setting CPU_WAIT.");
+    CpuWait = 0;
+  } else {
+    JLINK_SYS_Report("Clearing CPU_WAIT...");
+    CpuWait = (1 << _SHIFT_CPU_WAIT);
+  }
+  v = _CTL_DEFAULT_VAL & ~CpuWait;
+  _WriteData(_CPUSS_CTL, v);
+}
+
+/*********************************************************************
+*
+*       Global functions
+*
+**********************************************************************
+*/
+
+/*********************************************************************
+*
+*       ResetTarget()
+*
+*  Function description
+*    Replaces selected reset strategy of J-Link software.
+*    No matter what reset type is selected, if this function is present,
+*    it will be called instead of the selected reset strategy
+*
+*  Return value
+*    >= 0  O.K.
+*    <  0  Error
+*
+*  Notes
+*    (1) DLL expects target CPU to be halted / in debug mode, when leaving this function
+*    (2) May use MEM_ API functions
+*/
+int ResetTarget(void) {
+  int r;
+  U32 v;
+  U32 FPComp0;
+  U32 FPctrl;
+  U8 IsBPSet;
+  //
+  // Halt device before writing any registers & set BP on reset handler if valid.
+  //
+  r = _LL_TargetHalt(1000);
+  if (r < 0) {
+    JLINK_SYS_Report("Failed to halt target before reset. Forcing reset without halt.");
+  }
+  IsBPSet = _SetBPIfValid(_CODE_FLASH_BASE + 0x4, &FPctrl, &FPComp0);
+  //
+  // Reset CPU and release from stalling.
+  //
+  _SetClr_CpuWait(1);      // Make sure CPU is stalled after reset.
+  if (_USE_SYS_RESET_NOT_CORE_RESET) {
+    _WriteData(_AIRCR, (_AIRCR_VECTKEY | _AIRCR_SYSRESETREQ));
+  } else {
+    _WriteData(_PWR_CTL, (_PWR_CTL_VECTKEY | _PWR_CTL_RESET));
+  }
+  //
+  // Enable core.
+  //
+  JLINK_SYS_Sleep(100);    // Give reset some time before enabling the core.
+  _WriteData(_PWR_CTL, (_PWR_CTL_VECTKEY | _PWR_CTL_ENABLED));
+  _InitDAP();
+  _SetClr_CpuWait(0);      // Release CPU from stall after reset. This will halt the Core.
+  _LL_TargetGo();
+  JLINK_SYS_Sleep(300);    // Give BTL some time.
+  if (IsBPSet == 0) {
+    JLINK_SYS_Report("No application found. Manually halting CPU after reset.");
+    r = _LL_TargetHalt(1000);
+  } else {
+    JLINK_SYS_Report("Waiting for target to halt on reset hanlder.");
+    r = _LL_WaitUntilHalted(1000);
+    if (r < 0) {
+      JLINK_SYS_Report("Timeout while waiting for CPU to halt after reset. Manually halting CPU.");
+      r = _LL_TargetHalt(1000);
+    }
+    _RestoreBP(FPctrl, FPComp0);
+  }
+  if (r < 0) {
+    JLINK_SYS_Report("Error: Timeout while waiting for CPU to halt.");
+    return -1;
+  }
+  return 0;
+}
+
+/*************************** end of file ****************************/
