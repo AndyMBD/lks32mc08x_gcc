@@ -1,0 +1,8 @@
+void InitTarget(void) {
+  Report("********************************************");
+  Report("InitTarget for PSoC6 Cortex-M0 script");
+  CORESIGHT_AddAP(0, CORESIGHT_AHB_AP);  // SYSAP
+  CORESIGHT_IndexAHBAPToUse = AP[0];
+  CPU=CORTEX_M0;
+  Report("********************************************");
+}

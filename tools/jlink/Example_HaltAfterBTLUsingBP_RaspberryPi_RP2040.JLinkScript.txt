@@ -1,0 +1,227 @@
+/***********************************************************************
+*                    SEGGER Microcontroller GmbH                       *
+*                        The Embedded Experts                          *
+************************************************************************
+*                                                                      *
+*                  (c) SEGGER Microcontroller GmbH                     *
+*                        All rights reserved                           *
+*                          www.segger.com                              *
+*                                                                      *
+************************************************************************
+*                                                                      *
+************************************************************************
+*                                                                      *
+*                                                                      *
+*  Licensing terms                                                     *
+*                                                                      *
+* The use in source and binary forms, with or without modification,    *
+* is permitted for internal use only. The redistribution to any        *
+* third party is prohibited.                                           *
+*                                                                      *
+*                                                                      *
+* THIS SOFTWARE IS PROVIDED BY COPYRIGHT HOLDER "AS IS" AND ANY        *
+* EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE    *
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR   *
+* PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL COPYRIGHT HOLDER BE        *
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,     *
+* OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,             *
+* PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR   *
+* PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY  *
+* OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT         *
+* (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE    *
+* USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH     *
+* DAMAGE.                                                              *
+*                                                                      *
+************************************************************************
+
+-------------------------- END-OF-HEADER -----------------------------
+
+Purpose: Contains device specific handling for RaspberryPi RP2040.
+Literature:
+  [1]  J-Link User Guide
+
+Additional information:
+  For more information about public functions that can be implemented in order to customize J-Link actions, please refer to [1]
+*/
+
+/*********************************************************************
+*
+*       Constants (similar to defines)
+*
+**********************************************************************
+*/
+__constant U32 _FP_CTRL_ADDR                  = 0xE0002000;
+__constant U32 _FPCR_ADDR                     = 0xE0002008;
+__constant U32 _DEMCR_ADDR                    = 0xE000EDFC;
+__constant U32 _DHCSR_ADDR                    = 0xE000EDF0;
+//
+// The address contains the branch instruction to the so called "flash second stage" bootloader
+// We determined the address by reverse engineering the boot procedure.
+//
+__constant U32 _BOOT_ROM_DONE_ADDR            = 0x00002594;
+
+/*********************************************************************
+*
+*       Local functions
+*
+**********************************************************************
+*/
+
+/*********************************************************************
+*
+*       _HL_WaitUntilHalted
+*
+*  Function description
+*    Waits until CPU is halted
+*    If a timeout occurs, the CPU will be halted manually.
+*
+*  Return value
+*    >= 0:  O.K.
+*     < 0:  Error
+*/
+static int _HL_WaitUntilHalted(U32 Timeout) {
+  int t;
+  int v;
+  
+  t = JLINK_GetTime() + Timeout;
+  do {
+    v = JLINK_CPU_IsHalted();
+    if (v) {                                 // Halted? => Done
+      v = 0;
+      break;
+    }
+    v = (t - JLINK_GetTime());
+    if (v < 0) {                             // Timeout? => Done
+      break;
+    }
+  } while (1); 
+  return v;
+}
+
+/*********************************************************************
+*
+*       Global functions
+*
+**********************************************************************
+*/
+
+/*********************************************************************
+*
+*       ConfigTargetSettings()
+*
+*  Function description
+*    Called before InitTarget(). Mainly used to set some global DLL variables to customize the normal connect procedure.
+*    For ARM CoreSight devices this may be specifying the base address of some CoreSight components (ETM, ...)
+*    that cannot be automatically detected by J-Link due to erroneous ROM tables etc.
+*    May also be used to specify the device name in case debugger does not pass it to the DLL.
+*
+*  Notes
+*    (1) May not, under absolutely NO circumstances, call any API functions that perform target communication.
+*    (2) Should only set some global DLL variables
+*/
+void ConfigTargetSettings(void) { 
+  //
+  // The Raspberry Pi RP2040 is a bit special and non-standard from the debug interface side.
+  // While SWD multi-drop has initially been designed by ARM to allow having multiple MCU chips on the same PCB, all accessible via 1 debug connector,
+  // for the RP2040 multi-drop was used to implement debug access to the individual Cortex-M0+ cores.
+  //
+  // Standard:
+  //   1x AHB-AP per M0+ core.
+  //   Both APs are visible in the AP map and can be detected by the debug probe
+  //
+  // RP2040:
+  //   No AP is visible in the AP map by default.
+  //   Depending on the SWD multi-drop <InstanceId> that is sent to the MCU, on of the APs is visible in the AP map.
+  //   There are never both of them visible at the same time...
+  //   TargetId == 0x01002927, InstanceId == 0x0 => Core 0 is accessible
+  //   TargetId == 0x01002927, InstanceId == 0x1 => Core 1 is accessible
+  //
+  // So to use the RP2040, a J-Link with SWD multi-drop support is needed.
+  // https://wiki.segger.com/Software_and_Hardware_Features_Overview
+  //
+  // Note:
+  //   The way Raspberry Pi decided to implement multi-core here makes SWD multi-drop useless for these devices
+  //   because you cannot have 2 of them on the same PCB and debug both via the same debug connector...
+  //
+  JLINK_SYS_Report("J-Link script: ConfigTargetSettings()");
+  JLINK_ExecCommand("SetSWDTargetId=0x01002927");                 // 28-bit <TargetId>
+  JLINK_ExecCommand("SetSWDInstanceId=0x0");                      // 4-bit <InstanceId>
+  JLINK_CPU = CORTEX_M0;                                          // Let J-Link software know that we are connected to a Cortex-M0
+  return 0;
+}
+
+/*********************************************************************
+*
+*       AfterResetTarget()
+*
+*  Function description
+*    After reset, the CPU is halted before the boot ROM.
+*    In order to guarantee proper MCU functionality, we make sure
+*    that the boot ROM has been completly exceuted. We halt the CPU
+*    on the first instruction of the "flash second stage" which is
+*    a second level bootloader (part of the target application).
+*
+*    Reset behavior:
+*      1. Reset
+*      2. Set BP to last instruction of boot ROM (branch to "flash second stage" bootloader)
+*      3. Let the CPU run and hit the BP
+*      4. Perform single step in order to jump to the "flash second stage" bootloader
+*      5. Done
+*
+*    Boot behavior:
+*      1. Execute ROM which copies the first 256 bytes of the target application from flash to
+*         the end of SRAM5 (0x20041F00)
+*      2. Check if CRC of first 252 bytes is valid (stored in last 4 bytes of the 256 bytes)
+*      3. If checksum passes, assume what we have loaded is a valid flash second stage
+*      4. Start executing the loaded code from SRAM (SRAM5)
+*      5. If no valid image found in SPI after 0.5 seconds of attempting to boot, drop to USB device boot
+*
+*  Return value
+*    >= 0  O.K.
+*    <  0  Error
+*
+*  Notes
+*    (1) DLL expects target CPU to be halted / in debug mode, when leaving this function
+*    (2) May use MEM_ API functions
+*/
+int AfterResetTarget(void) {
+  U32 Ctrl;
+  U32 Fpcr;
+  U32 v;
+  int r;
+  //
+  // Preserve BP registers
+  //
+  Ctrl = JLINK_MEM_ReadU32(_FP_CTRL_ADDR);
+  Fpcr = JLINK_MEM_ReadU32(_FPCR_ADDR);
+  //
+  // Set breakpoint and clear all others
+  //
+  JLINK_MEM_WriteU32(_DEMCR_ADDR, (1 << 24));              // Set TRCENA bit (enables access to the DWT registers) and clear all vector catches
+  JLINK_MEM_WriteU32(_FP_CTRL_ADDR, (1 << 1) | (1 << 0));  // Set KEY + ENABLE
+  v = (_BOOT_ROM_DONE_ADDR & ~(3)) | (1 << 30) | (1 << 0); // Set Addr + BP_MATCH == break on lower halfword + Enable BP
+  JLINK_MEM_WriteU32(_FPCR_ADDR, v);
+  JLINK_CPU_Go();
+  r = _HL_WaitUntilHalted(200);                            // Wait until code BP hit or timeout occurred
+  if (r < 0) {
+    JLINK_SYS_Report("Core did not halt after reset (no valid boot image detected)");
+    JLINK_CPU_Halt();
+  }
+  //
+  // Restore BP registers
+  //
+  JLINK_MEM_WriteU32(_FP_CTRL_ADDR, Ctrl);
+  JLINK_MEM_WriteU32(_FPCR_ADDR, Fpcr);  
+  //
+  // Perform single step
+  //
+  JLINK_MEM_WriteU32(_DHCSR_ADDR, 0xA05F000F); // Data: Key + C_DEBUGEN + C_STEP + C_MASKINTS + C_HALT
+  JLINK_MEM_WriteU32(_DHCSR_ADDR, 0xA05F000D); // Data: Key + C_DEBUGEN + C_STEP + C_MASKINTS
+  //
+  // Invalidate DLL internal caches
+  //
+  JLINK_ExecCommand("InvalidateCPUState");
+  return 0;
+}
+
+/*************************** End of file ****************************/

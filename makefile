@@ -56,7 +56,7 @@ AS_INCLUDES =
 
 # target
 
-PROJECT_NAME = LK_StdPeriph
+PROJECT_NAME = AT089
 
 TARGET := $(PROJECT_NAME)
 

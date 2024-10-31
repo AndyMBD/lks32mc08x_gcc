@@ -1,0 +1,194 @@
+/***********************************************************************
+*                    SEGGER Microcontroller GmbH                       *
+*                        The Embedded Experts                          *
+************************************************************************
+*                                                                      *
+*                  (c) SEGGER Microcontroller GmbH                     *
+*                        All rights reserved                           *
+*                          www.segger.com                              *
+*                                                                      *
+************************************************************************
+*                                                                      *
+************************************************************************
+*                                                                      *
+*                                                                      *
+*  Licensing terms                                                     *
+*                                                                      *
+* The use in source and binary forms, with or without modification,    *
+* is permitted for internal use only. The redistribution to any        *
+* third party is prohibited.                                           *
+*                                                                      *
+*                                                                      *
+* THIS SOFTWARE IS PROVIDED BY COPYRIGHT HOLDER "AS IS" AND ANY        *
+* EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE    *
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR   *
+* PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL COPYRIGHT HOLDER BE        *
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,     *
+* OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,             *
+* PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR   *
+* PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY  *
+* OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT         *
+* (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE    *
+* USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH     *
+* DAMAGE.                                                              *
+*                                                                      *
+************************************************************************
+
+-------------------------- END-OF-HEADER -----------------------------
+
+Purpose: Template showing how to implement attach mode.
+Literature:
+  [1]  J-Link User Guide
+*/
+
+/*********************************************************************
+*
+*       Constants, fixed
+*
+**********************************************************************
+*/
+//
+// Registers (ARM)
+//
+__constant U32 _DHCSR_ADDR                       = 0xE000EDF0; // Debug Halting Control and Status Register
+//
+// Bits & Shifts (ARM)
+//
+__constant U32 _DHCSR_DBGKEY       = (0xA05F << 16);
+__constant U32 _DHCSR_S_HALT       = (1 << 17);
+__constant U32 _DHCSR_C_MASK       = (0x3F << 0);
+__constant U32 _DHCSR_C_HALT       = (1 << 1);
+__constant U32 _DHCSR_C_DEBUGEN    = (1 << 0);
+
+/*********************************************************************
+*
+*       Constants, configurable (Device specific)
+*
+**********************************************************************
+*/
+//
+// Misc
+//
+__constant U32 _DEF_BUSY_TIMEOUT = 500;
+
+/*********************************************************************
+*
+*       Static code
+*
+**********************************************************************
+*/
+
+/*********************************************************************
+*
+*       _WaitCPUHalted
+*
+*  Function description
+*    Wait for DHCSR to signal that the CPU is halted.
+*
+*  Return value
+*    >= 0:  O.K.
+*     < 0:  Error
+*/
+static int _WaitCPUHalted(void) {
+  int r;
+  int t;
+  int v;
+
+  t = JLINK_GetTime() + _DEF_BUSY_TIMEOUT;
+  do {
+    v  = JLINK_MEM_ReadU32(_DHCSR_ADDR);
+    if (v & _DHCSR_S_HALT) {          // Device halted? => Done.
+      r = 0;
+      break;
+    }
+    if ((t - JLINK_GetTime()) < 0) {  // Timeout reached? => Error.
+      JLINK_SYS_Report("Timeout while waiting for CPU to halt.");
+      r = -1;
+      break;
+    }
+  } while (1);
+  return r;
+}
+
+/*********************************************************************
+*
+*       Global functions
+*
+**********************************************************************
+*/
+
+/*********************************************************************
+*
+*       SetupTarget()
+*
+*  Function description
+*    If present, called after InitTarget() and after general debug connect sequence has been performed by J-Link.
+*    Usually used for more high-level CPU debug setup like writing certain memory locations,
+*    initializing PLL for faster download etc.
+*
+*  Return value
+*    >= 0:  O.K.
+*     < 0:  Error
+*
+*  Notes
+*    (1) Does not replace any DLL functionality but extends it.
+*    (2) May use MEM_ API functions.
+*/
+int SetupTarget(void) {
+  int r;
+  U32 v;
+  U8  ReqRestart;
+
+  ReqRestart = 0;
+  if (JLINK_ForceAttachTarget) {  // We are in attach mode? => Done.
+    JLINK_SYS_Report("-- Connecting in attach mode.");
+  }
+  //
+  // Enter code that DOES NOT require the CPU to be halted or reset here.
+  //
+  JLINK_SYS_Report("-- Handling executed during normal connect AND attach mode...");
+  if (JLINK_ForceAttachTarget) {  // We are in attach mode? => Done.
+    //
+    // If JLINK_ForceAttachTarget != 0, then the CPU MUST NOT be halted or reset under ANY circumstances.
+    //
+    JLINK_SYS_Report("-- Attach mode: Skipping parts of the device specific handling.");
+    return 0;
+  }
+  JLINK_SYS_Report("-- Handling NOT executed during attach...");
+  //
+  // Halt device before writing registers.
+  //
+  v = JLINK_MEM_ReadU32(_DHCSR_ADDR);
+  if ((v & _DHCSR_S_HALT) == 0) {  // Core is running? => Halt it.
+    v &= _DHCSR_C_MASK;            // Mask out "debug" bits.
+    v |= _DHCSR_DBGKEY;            // Debug key to make a write to the DHCSR a valid one.
+    v |= _DHCSR_C_DEBUGEN;         // Enable debug functionalities of the core.
+    v |= _DHCSR_C_HALT;            // Halt core.
+    JLINK_MEM_WriteU32(_DHCSR_ADDR, v);
+    //
+    // Wait until CPU is halted.
+    //
+    r = _WaitCPUHalted();
+    if (r < 0) {
+      return -1;
+    }
+    ReqRestart = 1;
+  }
+  //
+  // Write some device specific registers, to e.g:
+  //   - Disable watchdogs
+  //   - Disable sleep / low power modes
+  //   - Handle / lift device security.
+  //
+  //...
+  //
+  if (ReqRestart) {
+    v  = 0;                 // Do not set any debugbits. => Go.
+    v |= _DHCSR_DBGKEY;
+    v |= _DHCSR_C_DEBUGEN;  // Enable debug functionalities of the core.
+    JLINK_MEM_WriteU32(_DHCSR_ADDR, v);
+  }
+  return 0;
+}
+
+/*************************** end of file ****************************/

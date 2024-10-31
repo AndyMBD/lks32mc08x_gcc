@@ -1,0 +1,63 @@
+/***********************************************************************
+*                    SEGGER Microcontroller GmbH                       *
+*                        The Embedded Experts                          *
+************************************************************************
+*                                                                      *
+*                  (c) SEGGER Microcontroller GmbH                     *
+*                        All rights reserved                           *
+*                          www.segger.com                              *
+*                                                                      *
+************************************************************************
+*                                                                      *
+************************************************************************
+*                                                                      *
+*                                                                      *
+*  Licensing terms                                                     *
+*                                                                      *
+* The use in source and binary forms, with or without modification,    *
+* is permitted for internal use only. The redistribution to any        *
+* third party is prohibited.                                           *
+*                                                                      *
+*                                                                      *
+* THIS SOFTWARE IS PROVIDED BY COPYRIGHT HOLDER "AS IS" AND ANY        *
+* EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE    *
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR   *
+* PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL COPYRIGHT HOLDER BE        *
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,     *
+* OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,             *
+* PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR   *
+* PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY  *
+* OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT         *
+* (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE    *
+* USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH     *
+* DAMAGE.                                                              *
+*                                                                      *
+************************************************************************
+
+-------------------------- END-OF-HEADER -----------------------------
+
+Purpose: Script for STM32H7 device series
+Literature:
+  [1]  J-Link Script file documentation: https://wiki.segger.com/J-Link_script_files
+  [2]  J-Link Command String documentation: https://wiki.segger.com/J-Link_Command_Strings#SetSkipDebugDeInit
+
+Additional information:
+  For more information about public functions that can be implemented in order to customize J-Link actions, please refer to [1]
+*/
+
+/*********************************************************************
+*
+*       OnDisconnectTarget()
+*
+*  Function description
+*    If present, called right before debug DeInit.
+*    Usually used to reset any device specific debug registers set for device specific connect.
+*
+*  Return value
+*    >= 0:  O.K.
+*     < 0:  Error
+*/
+int OnDisconnectTarget(void) {
+  JLINK_ExecCommand("SetSkipDebugDeInit=1"); // Disable debug de-init on close.
+  return 0;
+}
