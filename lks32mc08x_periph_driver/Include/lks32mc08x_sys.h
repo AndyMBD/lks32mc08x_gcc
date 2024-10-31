@@ -43,8 +43,9 @@ typedef struct
 typedef struct
 {
 	uint32_t PLL_SrcSel;                      /**<PLL信号输入源选择，RC时钟或外部晶体 @see SYS_PLLSRSEL_RCH @see SYS_PLLSRSEL_CRYSTAL*/
-	uint32_t Clk_Sel;						  /**选择4MHz HS时钟或者PLL作为主时钟*/
+
 	uint32_t PLL_DivSel;                      /**<选择8个时钟周期中，哪个周期输出时钟*/
+	uint32_t PLL_ReDiv;                       /**<PLL再分频，1分频或4分频*/
 
 	uint32_t Clk_DivSPI;                      /**<I2C时钟分频*/
 	uint32_t Clk_DivUART;                     /**<UART时钟分频*/
@@ -60,9 +61,9 @@ typedef struct
 #define SYS_PLLSRSEL_RCH        0x00  /**<使用4MHz RC时钟*/
 #define SYS_PLLSRSEL_CRYSTAL    0x01  /**<使用晶体时钟*/
 
-/*PLL 或者 HS 时钟选择*/
-#define CLK_SEL_HS				0x00
-#define CLK_SEL_PLL				0x01
+/*PLL再分频定义*/
+#define SYS_PLLREDIV_4			0x00  /**<在PLL分频基础上再/4*/
+#define SYS_PLLREDIV_1			0x01  /**<在PLL分频基础上不再分频*/
 
 /*SPI时钟分频*/
 #define SYS_Clk_SPIDiv1          0 /**< SPI时钟分频，占时未使用*/
@@ -133,6 +134,8 @@ typedef struct
 #define MCU_POWER_3v3  0 //MCU 3.3V供电
 #define MCU_POWER_5v0  1 //MCU 5V供电
 
+#define POWER_MODE         MCU_POWER_5v0 
+
 #ifndef POWER_4V5
 #define POWER_4V5   0x00    /*电源掉电监测阈值为4.5V*/   
 #endif
@@ -191,7 +194,7 @@ void SYS_VolSelModule(uint32_t Vol);
 void SYS_VolSelModuleIRQ(void);
 
 /* MCU供电电压稳定判断中断使能函数*/
-void SYS_VolSelModuleEnableIRQ(void);
+void SYS_VolSelModuleEnableIRQ(uint32_t Vol);
 #endif /*__lks32mc08x_SYS_H */
 
 

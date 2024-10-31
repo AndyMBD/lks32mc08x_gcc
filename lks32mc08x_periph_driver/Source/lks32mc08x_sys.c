@@ -20,7 +20,6 @@
  * 
  */
 WAKE_InitTypeDef WAKE_InitStruct;
-uint32_t POWER_MODE;    /**<MCU供电模式*/
 /**
  *@brief @b 函数名称:   void SYS_Init(SYS_InitTypeDef* SYS_InitStruct)
  *@brief @b 功能描述:   SYS模块初始化函数
@@ -71,7 +70,7 @@ void SYS_Init(SYS_InitTypeDef *SYS_InitStruct)
     tmp2 |= (XTALPdn << 14);
     SYS_AFE_REG5 = tmp2;
 
-    SYS_CLK_CFG = SYS_InitStruct->PLL_DivSel + (SYS_InitStruct->Clk_Sel << 8);
+    SYS_CLK_CFG = SYS_InitStruct->PLL_DivSel + (SYS_InitStruct->PLL_ReDiv << 8);
     SYS_RST_CFG = SYS_InitStruct->WDT_Ena | (SYS_InitStruct->PORFilter_Ena << 1);
 
     SYS_CLK_DIV0 = SYS_InitStruct->Clk_DivSPI;
@@ -104,8 +103,8 @@ void SYS_Init(SYS_InitTypeDef *SYS_InitStruct)
 void SYS_StructInit(SYS_InitTypeDef *SYS_InitStruct)
 {
     SYS_InitStruct->PLL_SrcSel = SYS_PLLSRSEL_RCH;
-    SYS_InitStruct->Clk_Sel = CLK_SEL_PLL;
     SYS_InitStruct->PLL_DivSel = 0xFF;
+    SYS_InitStruct->PLL_ReDiv = SYS_PLLREDIV_1;
 
     SYS_InitStruct->Clk_DivSPI = SYS_Clk_SPIDiv1;
     SYS_InitStruct->Clk_DivUART = SYS_Clk_UARTDiv1;
@@ -639,7 +638,7 @@ void SYS_SoftResetModule(uint32_t nModule)
     SYS_WR_PROTECT = 0x7A83;
     SYS_SFT_RST = nModule;     /*模块复位*/
     SYS_SFT_RST &= ~nModule;   /*释放复位操作*/
-	SYS_WR_PROTECT = 0x0;      /*关闭系统寄存器写操作*/
+	  SYS_WR_PROTECT = 0x0;      /*关闭系统寄存器写操作*/
 }
 
 /**
@@ -687,20 +686,20 @@ void DSP_Init(void)
  */
 void SYS_VolSelModule(uint32_t Vol)
 {
-		if(Vol == MCU_POWER_5v0)  // 5.0 Voltage
-		{
-			POWER_MODE = MCU_POWER_5v0;
-			SYS_WR_PROTECT = 0x7a83;       /* 解除系统寄存器写保护 */
-			SYS_AFE_REG6 &=~(BIT8|BIT9);  //main init set to 3.6v, this clause reset to 4.2v	 
-			SoftDelay(10);                /* 延时10us*/
-			SYS_AFE_REG6 |= POWER_4V2 << 8;//配置为4.2V监控，可根据实际配置其它档位：3.6V/3.9V/4.2V/4.5V
-			SoftDelay(100);                /* 延时100us, 等待电源检测配置完毕*/
-			while(SYS_AFE_CMP & BIT13){};  //等待外部5VOK 
-			SYS_AFE_REG6 |= POWER_3V6<< 8; //配置为3.6V，防止电源和欠压比较的抖动
-      NVIC_ClearPendingIRQ(PWRDN_IRQn);
-			SYS_WR_PROTECT = 0x0;          /*关闭系统寄存器写操作*/
-		}else{
-			 POWER_MODE = MCU_POWER_3v3;
+	if(Vol == MCU_POWER_5v0)  // 5.0 Voltage
+	 {
+		 SYS_WR_PROTECT = 0x7a83;       /* 解除系统寄存器写保护 */
+		 SYS_AFE_REG6 &=~(BIT8|BIT9);  //main init set to 3.6v, this clause reset to 4.5v 
+		 SoftDelay(100);              /* 延时100us*/
+		 SYS_AFE_REG6 |= POWER_4V2 << 8;//配置为4.2V监控，可根据实际配置其它档位：3.6V/3.9V/4.2V/4.5V
+		 SoftDelay(100);              /* 延时100us, 等待电源检测配置完毕*/
+		 while(SYS_AFE_CMP & BIT13){};  //等待外部5VOK
+		 SYS_AFE_REG6 &=~(BIT8|BIT9);  //reset to 4.5V
+		 SoftDelay(100);             /* 延时100us*/
+		 SYS_AFE_REG6 |= POWER_3V6<< 8; //配置为3.6V，防止电源和欠压比较的抖动
+		 SoftDelay(100);             /* 延时100us*/
+		 NVIC_ClearPendingIRQ(PWRDN_IRQn);
+		 SYS_WR_PROTECT = 0x0;          /*关闭系统寄存器写操作*/
 		}
 }
 
@@ -724,26 +723,25 @@ void SYS_VolSelModule(uint32_t Vol)
  */
 void SYS_VolSelModuleIRQ(void)
 {
-	 NVIC_DisableIRQ(PWRDN_IRQn);       /* 关闭电源检测中断 */ 
-	 NVIC_ClearPendingIRQ(PWRDN_IRQn);
+		NVIC_DisableIRQ(PWRDN_IRQn);       /* 关闭电源检测中断 */ 
+		NVIC_ClearPendingIRQ(PWRDN_IRQn);
 		//turn off pwm
-	 MCPWM_PRT   = 0xDEAD;
-	 MCPWM_FAIL &= ~BIT6 ;
-	 MCPWM_TCLK &=~0x0000000C;
-	 MCPWM_PRT   = 0x0000;
-	
-	 SYS_WR_PROTECT = 0x7A83;   /* 解除系统寄存器写保护 */
-	 SYS_SFT_RST = 0xff;    //所有外设复位	 
-	 SYS_CLK_CFG &= ~BIT8;  //系统时钟选择RCH
-   SYS_AFE_REG5 &= ~BIT15;//关闭PLL
-	 SYS_SFT_RST = 0x0;     // 释放外设复位	
-	 SYS_WR_PROTECT = 0x0;      /*关闭系统寄存器写操作*/
-	 
-   NVIC_SystemReset();//软复位	 
-   
+		MCPWM_PRT   = 0xDEAD;
+		MCPWM_FAIL &= ~BIT6 ;
+		MCPWM_TCLK &=~0x0000000C;
+		MCPWM_PRT   = 0x0000;
+		SYS_WR_PROTECT = 0x7A83;   /* 解除系统寄存器写保护 */
+		SYS_SFT_RST = 0xff;        //所有外设复位 
+		SYS_CLK_CFG &= ~BIT8;      //系统时钟选择RCH
+		SYS_AFE_REG5 &= ~BIT15;    //关闭PLL
+		SYS_SFT_RST = 0x0;         // 释放外设复位
+		SYS_WR_PROTECT = 0x0;      /*关闭系统寄存器写操作*/
+		NVIC_SystemReset();//软复位 
+
 }
+
 /**
- *@brief @b 函数名称:   void SYS_VolSelModuleEnableIRQ(void)
+ *@brief @b 函数名称:   void SYS_VolSelModuleEnableIRQ(uint32_t Vol)
  *@brief @b 功能描述:   MCU供电电压稳定判断中断使能函数
  *@see被调用函数：      无
  *@param输入参数：      无
@@ -753,22 +751,23 @@ void SYS_VolSelModuleIRQ(void)
  *@warning             无
  *@par 示例代码：
  *@code    
-           SYS_VolSelModuleIRQ();
+           SYS_VolSelModuleIRQ(MCU_POWER_5v0);
  *@par 修改日志:
  * <table>
  * <tr><th>Date	        <th>Version  <th>Author     <th>Description
  * <tr><td>2023年10月19日 <td>1.0     <td>HuangMG      <td>创建
  * </table>
  */
-void SYS_VolSelModuleEnableIRQ(void)
+void SYS_VolSelModuleEnableIRQ(uint32_t Vol)
 {
-	 if(POWER_MODE == MCU_POWER_5v0)
-	 {
-	   NVIC_SetPriority(PWRDN_IRQn, 0);  /*PWRDN_IRQn中断优先级设置为0*/
-	   NVIC_EnableIRQ(PWRDN_IRQn);       /* 打开电源检测中断 */
-	 }else{ 
-		 NVIC_DisableIRQ(PWRDN_IRQn);       /* 关闭电源检测中断 */ 
-	 }
+     if(Vol == MCU_POWER_5v0)
+     {
+       NVIC_SetPriority(PWRDN_IRQn, 0);  /*PWRDN_IRQn中断优先级设置为0*/
+       NVIC_EnableIRQ(PWRDN_IRQn);       /* 打开电源检测中断 */
+     }else{ 
+
+       NVIC_DisableIRQ(PWRDN_IRQn);       /* 关闭电源检测中断 */ 
+     }
 }
 
 

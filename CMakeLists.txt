@@ -80,41 +80,28 @@ add_link_options(-pipe ${MCU_FLAGS} -T${LINKER_SCRIPT} -Wl,--no-warn-rwx-segment
 # Add include directories
 include_directories(
     # include
+    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/LKS32MC08x
     ${CMAKE_SOURCE_DIR}/lks32mc08x_periph_driver/Include
     ${CMAKE_SOURCE_DIR}/lks32mc08x_periph_driver/source
-    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/RTE/_Target_1
     ${CMAKE_SOURCE_DIR}/SEGGER_RTT
-    ${CMAKE_SOURCE_DIR}/LKS32MC08x
 )
 # add source, only surfix .c .cpp
-file(GLOB_RECURSE SOURCE
-                        "${CMAKE_SOURCE_DIR}/lks32mc08x_periph_driver/source/*.c "
-                        "${CMAKE_SOURCE_DIR}/lks32mc08x_periph_driver/source/*.lib"
-                        # "${CMAKE_SOURCE_DIR}/lks32mc08x_periph_driver/source/lks32mc03x_adc.c "
-                        # "${CMAKE_SOURCE_DIR}/lks32mc08x_periph_driver/source/lks32mc03x_cmp.c "
-                        # "${CMAKE_SOURCE_DIR}/lks32mc08x_periph_driver/source/lks32mc03x_dac.c "
-                        # "${CMAKE_SOURCE_DIR}/lks32mc08x_periph_driver/source/lks32mc03x_DMA.c "
-                        # "${CMAKE_SOURCE_DIR}/lks32mc08x_periph_driver/source/lks32mc03x_dsp.c "
-                        # "${CMAKE_SOURCE_DIR}/lks32mc08x_periph_driver/source/lks32mc03x_gpio.c"
-                        # "${CMAKE_SOURCE_DIR}/lks32mc08x_periph_driver/source/lks32mc03x_hall.c"
-                        # "${CMAKE_SOURCE_DIR}/lks32mc08x_periph_driver/source/lks32mc03x_I2C.c"
-                        # "${CMAKE_SOURCE_DIR}/lks32mc08x_periph_driver/source/lks32mc03x_IWDG.c"
-                        # "${CMAKE_SOURCE_DIR}/lks32mc08x_periph_driver/source/lks32mc03x_MCPWM.c"
-                        # "${CMAKE_SOURCE_DIR}/lks32mc08x_periph_driver/source/lks32mc03x_opa.c "
-                        # "${CMAKE_SOURCE_DIR}/lks32mc08x_periph_driver/source/lks32mc03x_spi.c "
-                        # "${CMAKE_SOURCE_DIR}/lks32mc08x_periph_driver/source/lks32mc03x_sys.c "
-                        # "${CMAKE_SOURCE_DIR}/lks32mc08x_periph_driver/source/lks32mc03x_timer.c"
-                        # "${CMAKE_SOURCE_DIR}/lks32mc08x_periph_driver/source/lks32mc03x_uart.c"
-                        "${CMAKE_SOURCE_DIR}/SEGGER_RTT/*.c"
-                        # "${CMAKE_SOURCE_DIR}/SEGGER_RTT/SEGGER_RTT.c"
-                        # "${CMAKE_SOURCE_DIR}/SEGGER_RTT/SEGGER_RTT_printf.c"
-                        "${CMAKE_SOURCE_DIR}/source/*.c"
-                        # "${CMAKE_SOURCE_DIR}/source/main.c"
-                        # "${CMAKE_SOURCE_DIR}/source/hardware_init.c"
-                        # "${CMAKE_SOURCE_DIR}/source/interrupt.c"
-                        # "${CMAKE_SOURCE_DIR}/source/delay.c"
+# file(GLOB_RECURSE SOURCE
+file(GLOB SOURCE
+          ${CMAKE_SOURCE_DIR}/AppFunction/*.c 
+          ${CMAKE_SOURCE_DIR}/LKS32MC08x/*.c
+          ${CMAKE_SOURCE_DIR}/lks32mc08x_periph_driver/source/*.c 
+          ${CMAKE_SOURCE_DIR}/SEGGER_RTT/*.c
+          ${CMAKE_SOURCE_DIR}/source/*.c
+          ${CMAKE_SOURCE_DIR}/lks32mc08x_periph_driver/source/*.lib
 )
+message(STATUS "****************************************")
+message(STATUS "SOURCE: ${CMAKE_SOURCE_DIR}")
+message(STATUS "****************************************")
 message(STATUS "SOURCE: ${SOURCE}")
+message(STATUS "****************************************")
 # file(GLOB_RECURSE SOURCE
 #     "Drivers/*.c"
 #     "Src/*.c"
@@ -155,18 +142,21 @@ endif ()
 
 # build binary and hex file
 # add_executable(${PROJECT_NAME}.elf  ${SOURCE} ${ASM_SOURCE} ${LINKER_SCRIPT})
-add_executable(${PROJECT_NAME}.elf  ${SOURCE} ${ASM_SOURCE} ${LINKER_SCRIPT})
+add_executable(${PROJECT_NAME}.elf  
+                        ${ASM_SOURCE} 
+                        ${LINKER_SCRIPT}
+                        ${SOURCE} )
 # Specify linker script
 
-# Libraries to link
+# # Libraries to link
 target_link_libraries(${PROJECT_NAME}.elf
                     ${CMAKE_SOURCE_DIR}/lks32mc08x_periph_driver/source/lks32mc08x_nvr.lib
 )
-if(BUILD_DSP)
-    add_dependencies(${PROJECT_NAME}.elf CMSISDSP) # build DSP lib
-endif()
+# if(BUILD_DSP)
+#     add_dependencies(${PROJECT_NAME}.elf CMSISDSP) # build DSP lib
+# endif()
 
-target_link_libraries(${PROJECT_NAME}.elf ${DSP_NAME}) # link DSP lib
+# target_link_libraries(${PROJECT_NAME}.elf ${DSP_NAME}) # link DSP lib
 
 add_custom_command(
     TARGET ${PROJECT_NAME}.elf POST_BUILD

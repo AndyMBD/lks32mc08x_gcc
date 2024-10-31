@@ -3,7 +3,7 @@
 *                        The Embedded Experts                        *
 **********************************************************************
 *                                                                    *
-*            (c) 1995 - 2021 SEGGER Microcontroller GmbH             *
+*            (c) 1995 - 2018 SEGGER Microcontroller GmbH             *
 *                                                                    *
 *       www.segger.com     Support: support@segger.com               *
 *                                                                    *
@@ -21,10 +21,20 @@
 *                                                                    *
 * Redistribution and use in source and binary forms, with or         *
 * without modification, are permitted provided that the following    *
-* condition is met:                                                  *
+* conditions are met:                                                *
 *                                                                    *
 * o Redistributions of source code must retain the above copyright   *
-*   notice, this condition and the following disclaimer.             *
+*   notice, this list of conditions and the following disclaimer.    *
+*                                                                    *
+* o Redistributions in binary form must reproduce the above          *
+*   copyright notice, this list of conditions and the following      *
+*   disclaimer in the documentation and/or other materials provided  *
+*   with the distribution.                                           *
+*                                                                    *
+* o Neither the name of SEGGER Microcontroller GmbH         *
+*   nor the names of its contributors may be used to endorse or      *
+*   promote products derived from this software without specific     *
+*   prior written permission.                                        *
 *                                                                    *
 * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND             *
 * CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,        *
@@ -42,14 +52,13 @@
 *                                                                    *
 **********************************************************************
 *                                                                    *
-*       RTT version: 6.98e                                           *
+*       RTT version: 6.30b                                           *
 *                                                                    *
 **********************************************************************
-
 ---------------------------END-OF-HEADER------------------------------
 File    : SEGGER_RTT_printf.c
 Purpose : Replacement for printf to write formatted data via RTT
-Revision: $Rev: 17697 $
+Revision: $Rev: 9599 $
 ----------------------------------------------------------------------
 */
 #include "SEGGER_RTT.h"
@@ -98,6 +107,7 @@ typedef struct {
 *
 **********************************************************************
 */
+int SEGGER_RTT_vprintf(unsigned BufferIndex, const char * sFormat, va_list * pParamList);
 
 /*********************************************************************
 *
@@ -441,21 +451,6 @@ int SEGGER_RTT_vprintf(unsigned BufferIndex, const char * sFormat, va_list * pPa
       case '%':
         _StoreChar(&BufferDesc, '%');
         break;
-	  /*******************Êä³ö¸¡µã*************/
-		case 'f':
-		case 'F':
-		{
-			float fv;
-			fv = (float)va_arg(*pParamList, double);
-			v = (int)fv;
-			_PrintInt(&BufferDesc, v, 10u, NumDigits, FieldWidth, FormatFlags);
-			_StoreChar(&BufferDesc, '.');
-			
-			v = abs((int)(fv * 100));
-			v = v % 100;
-			_PrintInt(&BufferDesc, v, 10u, 2, FieldWidth, FormatFlags);;
-			break;
-		}
       default:
         break;
       }

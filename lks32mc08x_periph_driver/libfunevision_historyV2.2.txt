@@ -1,3 +1,9 @@
+lks32mc08x_periph_driver V2.2
+对V2.1的（lks32mc08x_sys.c内增加电源检查函数，实际使用在void Clock_Init(void)和void PWRDN_IRQHandler(void)函数内）这些内容做更新，之前的有问题。
+
+lks32mc08x_periph_driver V2.1
+lks32mc08x_sys.c内增加电源检查函数，实际使用在void Clock_Init(void)和void PWRDN_IRQHandler(void)函数内。
+
 lks32mc08x_periph_driver V2.0
 增加定时器初始化使能接口，FuncState EN;      /*定时器模块使能*/（lks32mc08x.tim.h）。
 

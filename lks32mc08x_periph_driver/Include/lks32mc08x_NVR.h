@@ -1,14 +1,14 @@
 /**
  * @file 
  * @copyright (C)2015, LINKO SEMICONDUCTOR Co.ltd
- * @brief ÎÄ¼şÃû³Æ£º lks32mc08x_nvr.h\n
- * ÎÄ¼ş±êÊ¶£º ÎŞ \n
- * ÄÚÈİÕªÒª£º NVRÇı¶¯Í·ÎÄ¼ş \n
- * ÆäËüËµÃ÷£º ÎŞ \n
- *@par ĞŞ¸ÄÈÕÖ¾:
+ * @brief æ–‡ä»¶åç§°ï¼š lks32mc08x_nvr.h\n
+ * æ–‡ä»¶æ ‡è¯†ï¼š æ—  \n
+ * å†…å®¹æ‘˜è¦ï¼š NVRé©±åŠ¨å¤´æ–‡ä»¶ \n
+ * å…¶å®ƒè¯´æ˜ï¼š æ—  \n
+ *@par ä¿®æ”¹æ—¥å¿—:
  * <table>
  * <tr><th>Date	        <th>Version  <th>Author  <th>Description
- * <tr><td>2018Äê07ÔÂ25ÈÕ <td>1.0     <td>DengT      <td>´´½¨
+ * <tr><td>2018å¹´07æœˆ25æ—¥ <td>1.0     <td>DengT      <td>åˆ›å»º
  * </table>
  */
 #ifndef _LKS32MC08X_NVR_H_
@@ -17,18 +17,18 @@
 #include "lks32mc08x.h"
 
 /**
- *@brief ¶ÁÈ¡NVR 1KB´óĞ¡µÄÓÃ»§Çøº¯Êı
- *@par Ê¾Àı´úÂë£º¶ÁÈ¡NVRÓÃ»§µØÖ·0µÄÊı¾İ
+ *@brief è¯»å–NVR 1KBå¤§å°çš„ç”¨æˆ·åŒºå‡½æ•°
+ *@par ç¤ºä¾‹ä»£ç ï¼šè¯»å–NVRç”¨æˆ·åœ°å€0çš„æ•°æ®
  *@code
         uint32_t LKS_NVRValue = 0;
-        LKS_NVRValue = Read_NVR(0x00);//·¶Î§0x000~0x400 1KB¿Õ¼ä
+        LKS_NVRValue = Read_NVR(0x00);//èŒƒå›´0x000~0x400 1KBç©ºé—´
  *@endcode
  */
 uint32_t Read_NVR(uint32_t adr);
 
 /**
- *@brief ¶ÁÈ¡Ğ¾Æ¬Ä£¿éĞ£ÕıÖµº¯Êı
- *@par Ê¾Àı´úÂë£º¶ÁÈ¡Ğ¾Æ¬ID
+ *@brief è¯»å–èŠ¯ç‰‡æ¨¡å—æ ¡æ­£å€¼å‡½æ•°
+ *@par ç¤ºä¾‹ä»£ç ï¼šè¯»å–èŠ¯ç‰‡ID
  *@code
         uint32_t LKS_ID1;
         uint32_t LKS_ID2;

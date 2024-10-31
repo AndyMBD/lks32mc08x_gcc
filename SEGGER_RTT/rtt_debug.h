@@ -1,7 +1,7 @@
 #include <stdio.h>
 
 /*用于控制输出调试信息*/
-#define PRINTF_DEBUG    1U
+#define PRINTF_DEBUG    0U
 #define USE_RTT_PRINTF  1U
 
 #if (PRINTF_DEBUG > 0U)
