@@ -49,10 +49,13 @@ add_compile_options(-pipe ${MCU_FLAGS} -Og -Wall -Werror -fmessage-length=0 # ba
                     -Wno-implicit-function-declaration # disable implicit function declaration warning
                     -Wno-unused-parameter # disable unused parameter warning
                     )
-add_link_options(-pipe ${MCU_FLAGS} -T${LINKER_SCRIPT} -Wl,--no-warn-rwx-segments # close RWX warning
-                 -lc -lstdc++ -lm -lnosys # lib options
-                 -Wl,--gc-sections -flto -specs=nano.specs -specs=nosys.specs # optimize options
-                 -Wl,-Map=${PROJECT_BINARY_DIR}/${PROJECT_NAME}.map -Wl,--cref -Wl,--print-memory-usage # map options
+#-specs=nosys.specs will cause _close/_lseek/_readis/_write not implemented and will always fail
+add_link_options(-pipe ${MCU_FLAGS} -T${LINKER_SCRIPT} -specs=nano.specs #rdimon.specs  nosys.specs  nano.specs
+                 -Wl,-Map=${PROJECT_BINARY_DIR}/${PROJECT_NAME}.map 
+                 -Wl,--no-warn-rwx-segments # close RWX warning
+                 -Wl,--cref 
+                 -Wl,--gc-sections 
+                 -Wl,--print-memory-usage # map options
                  ) # if your executable is too large , try option '-s' to strip symbols
 # add_compile_definitions(__CC_ARM)
 # add_compile_definitions() works for compile stage
